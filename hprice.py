@@ -1,488 +1,277 @@
 import pandas as pd 
-import numpy
+import numpy as np
 from numpy import linalg 
-from sklearn.kernel_ridge import KernelRidge
-from sklearn.neural_network import MLPRegressor
 from sklearn import svm
-from sklearn.preprocessing import MaxAbsScaler
-from sklearn.model_selection import train_test_split
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import cross_val_score
-from sklearn.neural_network import MLPClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import Ridge
+from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
-from collections import Counter
 import seaborn as sns
 import scipy.linalg
 import random
 import math
 
-# Meaning of the header
-#survival	Survival 
-#pclass	Ticket class	1 = 1st, 2 = 2nd, 3 = 3rd
-#sex	Sex	
-#Age	Age in years	
-#sibsp	# of siblings / spouses aboard the Titanic	
-#parch	# of parents / children aboard the Titanic	
-#ticket	Ticket number	
-#fare	Passenger fare	
-#cabin	Cabin number	
-# embarked	Port of Embarkation
-#header: PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked
-
-### Read the csv files to train and to test 
+### Read the csv files for training and test set 
 
 tr=pd.read_csv("train.csv")
-sztr=len(tr.ix[:, 'Id'])
-
 ts=pd.read_csv("test.csv")
-#ts.insert(1, 'Survived', 0)
-szts=len(pas_ts.ix[:, 'PassengerId'])
-psid=pas_ts['PassengerId']
 
-pas_tot=pd.concat([pas_tr, pas_ts], axis=0, ignore_index=True)
-sztot=len(pas_tot.ix[:, 'PassengerId'])
 
-### Print some information of the two files
-print ('!-----------------------!')
-pas_tr.info()
-print ('!-----------------------!')
-pas_ts.info()
-print ('!-----------------------!')
-pas_tot.info()
+print ("Training set shape {}".format(tr.shape))
+print ("Test set shape {}".format(ts.shape))
+
+ts.insert(80, 'SalePrice', 0)
+
+# Data frame that contains training and test set 
+# I'll work on this for a first cleaning and data analysis
+tot=pd.concat([tr, ts], axis=0, ignore_index=True)
+
+print ("Tot set shape {}".format(tot.shape))
+
+print " "
+print " "
+
+
+#['Id', 'MSSubClass', 'MSZoning', 'LotFrontage', 'LotArea', 'Street', 'Alley', 'LotShape', 'LandContour', 'Utilities', 'LotConfig', 'LandSlope', 'Neighborhood', 'Condition1', 'Condition2', 'BldgType', 'HouseStyle', 'OverallQual', 'OverallCond', 'YearBuilt', 'YearRemodAdd', 'RoofStyle', 'RoofMatl', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 'MasVnrArea', 'ExterQual', 'ExterCond', 'Foundation', 'BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinSF1', 'BsmtFinType2', 'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', 'Heating', 'HeatingQC', 'CentralAir', 'Electrical', '1stFlrSF', '2ndFlrSF', 'LowQualFinSF', 'GrLivArea', 'BsmtFullBath', 'BsmtHalfBath', 'FullBath', 'HalfBath', 'BedroomAbvGr', 'KitchenAbvGr', 'KitchenQual', 'TotRmsAbvGrd', 'Functional', 'Fireplaces', 'FireplaceQu', 'GarageType', 'GarageYrBlt', 'GarageFinish', 'GarageCars', 'GarageArea', 'GarageQual', 'GarageCond', 'PavedDrive', 'WoodDeckSF', 'OpenPorchSF', 'EnclosedPorch', '3SsnPorch', 'ScreenPorch', 'PoolArea', 'PoolQC', 'Fence', 'MiscFeature', 'MiscVal', 'MoSold', 'YrSold', 'SaleType', 'SaleCondition', 'SalePrice']
+
+
+
+#tot=pd.concat([tr, ts], axis=0, ignore_index=True)
 
 ### Print a few values
 print ('!-----------------------!')
-print pas_tr.head()
+print ('Training data set')
+print tr.head()
+print " "
 print ('!-----------------------!')
-print pas_ts.head()
-
-
-### Drop the column 'PassengerId' which is for sure useless
-
-pas_tr=pas_tr.drop('PassengerId',axis=1)
-pas_ts=pas_ts.drop('PassengerId',axis=1)
-pas_tot=pas_tot.drop('PassengerId',axis=1)
-
-### Drop the column 'Ticket'
-### It is hard to understand how this column would contribute
-### The information conatined in it might already be incuded in 'Pclass' or 'Fare' or 'Embarked' 
-
-ticket_dummies_tot  = pd.get_dummies(pas_tot['Ticket'])
-
-pas_tot = pd.concat([pas_tot, ticket_dummies_tot],axis=1)
-pas_tr = pd.concat([pas_tr, ticket_dummies_tot.ix[0:890,:]],axis=1)
-tmp=ticket_dummies_tot.ix[891:1308,:]
-tmp.index=range(418)
-pas_ts = pd.concat([pas_ts,tmp],axis=1)
-
-#print "pippo"
-#print pas_ts.head
-#print ticket_dummies_tot.ix[891:1308,:]
-
-pas_tr=pas_tr.drop('Ticket',axis=1)
-pas_ts=pas_ts.drop('Ticket',axis=1)
-pas_tot=pas_tot.drop('Ticket',axis=1)
-
-pas_tr=pas_tr.drop('373450',axis=1)
-pas_ts=pas_ts.drop('373450',axis=1)
-pas_tot=pas_tot.drop('373450',axis=1)
-
-### Transform the data on sex into an array of 0 and 1
-
-def sex_to_integer(sex):
-    if sex=='male':
-        si=0
-    else:
-        si=1
-    return si
-
-pas_tr['Sex'] = pas_tr.Sex.apply(sex_to_integer)
-pas_ts['Sex'] = pas_ts.Sex.apply(sex_to_integer)
-pas_tot['Sex'] = pas_tot.Sex.apply(sex_to_integer)
-
-### Define a new useful column with total number of family members
-
-pas_tr['TotFamily']=pas_tr['SibSp']+pas_tr['Parch']+1
-pas_ts['TotFamily']=pas_ts['SibSp']+pas_ts['Parch']+1
-pas_tot['TotFamily']=pas_tot['SibSp']+pas_tot['Parch']+1
-
-### Create column with titles: Mr., Miss, etc.
-
-def find_title(nm):
-    if ("Master" in nm):
-        title="Master"
-    elif ("Miss." in nm) or ("Mlle" in nm) or ("Ms." in nm):
-        title="Miss"
-    elif ("Mr." in nm) or ("Don." in nm) or ("Major" in nm) or ("Capt" in nm) or ("Jonkheer" in nm) or ("Rev" in nm) or ("Col" in nm) or ("Sir." in nm):
-        title="Mr"
-    elif ("Mrs." in nm) or ("Countess" in nm) or ("Mme" in nm) or ("Dona." in nm) or ("Lady." in nm):
-        title="Mrs"
-    elif ("Dr" in nm):
-        title="Dr"
-    return title
-
-pas_tr['Title'] = pas_tr.Name.apply(find_title)
-pas_ts['Title'] = pas_ts.Name.apply(find_title)
-
-title_dummies_tr  = pd.get_dummies(pas_tr['Title'])
-title_dummies_tr.columns = ['Title_1','Title_2','Title_3','Title_4','Title_5']
-title_dummies_tr.drop(['Title_5'], axis=1, inplace=True)
-
-title_dummies_ts  = pd.get_dummies(pas_ts['Title'])
-title_dummies_ts.columns = ['Title_1','Title_2','Title_3','Title_4','Title_5']
-title_dummies_ts.drop(['Title_5'], axis=1, inplace=True)
-
-pas_tr.drop(['Title'],axis=1,inplace=True)
-pas_ts.drop(['Title'],axis=1,inplace=True)
-
-pas_tr = pas_tr.join(title_dummies_tr)
-pas_ts = pas_ts.join(title_dummies_ts)
-
-### Create column with 1 if the Name has parethesis and 0 if not
-
-def find_par(nm):
-    if ("(" in nm):
-        par=1
-    else:
-        par=0
-    return par
-
-pas_tr['Par'] = pas_tr.Name.apply(find_par)
-pas_ts['Par'] = pas_ts.Name.apply(find_par)
-
-### Manipulations concerning the age
-### Ages below 1 are rounded to 0
-### A few "intemediate" ages are rounded (example: 45.5--->46)
-### Fill in the missing ages
-### To fill in missing ages let's consider that a Master is a child
-### that a Miss travelling with a Parch is more likely to be a child
-### I replace the non defined ages with averages of subgroups
-
-agetot=[]
-agekidm=[]
-agekidf=[]
-agemiss=[]
-agemr=[]
-agemrs=[]
-
-pas_tot.Age = pas_tot.Age.fillna(-10)
-pas_tr.Age = pas_tr.Age.fillna(-10)
-pas_ts.Age = pas_ts.Age.fillna(-10)
-for i in range(sztot):
-    if (pas_tot.ix[i,'Age']>0):
-        agetot.append(pas_tot.ix[i,'Age'])
-    if ("Master" in pas_tot.ix[i,'Name'] and pas_tot.ix[i,'Age']>0):
-        agekidm.append(pas_tot.ix[i,'Age'])
-    elif ("Miss." in pas_tot.ix[i,'Name'] and pas_tot.ix[i,'Age']>0 and pas_tot.ix[i,'Parch'] >= 1):
-        agekidf.append(pas_tot.ix[i,'Age'])
-    elif ("Miss." in pas_tot.ix[i,'Name'] and pas_tot.ix[i,'Age']>0 and pas_tot.ix[i,'Parch'] == 0):
-        agemiss.append(pas_tot.ix[i,'Age'])
-    elif ("Mr." in pas_tot.ix[i,'Name'] and pas_tot.ix[i,'Age']>0):
-        agemr.append(pas_tot.ix[i,'Age'])
-    elif ("Mrs." in pas_tot.ix[i,'Name'] and pas_tot.ix[i,'Age']>0):
-        agemrs.append(pas_tot.ix[i,'Age'])
-
-meankidm=numpy.mean(agekidm) 
-meankidf=numpy.mean(agekidf)
-meanmiss=numpy.mean(agemiss)
-meanmr=numpy.mean(agemr)
-meanmrs=numpy.mean(agemrs)
-meantot=numpy.mean(agetot)
-
-for i in range(sztr):
-    if ("Master" in pas_tr.ix[i,'Name'] and pas_tr.ix[i,'Age']<0):
-        pas_tr.ix[i,'Age']=meankidm
-    elif ("Miss." in pas_tr.ix[i,'Name'] and pas_tr.ix[i,'Age']<0 and pas_tr.ix[i,'Parch'] >= 1):
-        pas_tr.ix[i,'Age']=meankidf
-    elif ("Miss." in pas_tr.ix[i,'Name'] and pas_tr.ix[i,'Age']<0 and pas_tr.ix[i,'Parch'] == 0):
-        pas_tr.ix[i,'Age']=meanmiss
-    elif ("Mr." in pas_tr.ix[i,'Name'] and pas_tr.ix[i,'Age']<0):
-        pas_tr.ix[i,'Age']=meanmr
-    elif ("Mrs." in pas_tr.ix[i,'Name'] and pas_tr.ix[i,'Age']<0):
-        pas_tr.ix[i,'Age']=meanmrs
-    else:
-        if (pas_tr.ix[i,'Age']<0):
-            pas_tr.ix[i,'Age']=meantot
-
-for i in range(szts):
-    if ("Master" in pas_ts.ix[i,'Name'] and pas_ts.ix[i,'Age']<0):
-        pas_ts.ix[i,'Age']=meankidm
-    elif ("Miss." in pas_ts.ix[i,'Name'] and pas_ts.ix[i,'Age']<0 and pas_ts.ix[i,'Parch'] >= 1):
-        pas_ts.ix[i,'Age']=meankidf
-    elif ("Miss." in pas_ts.ix[i,'Name'] and pas_ts.ix[i,'Age']<0 and pas_ts.ix[i,'Parch'] == 0):
-        pas_ts.ix[i,'Age']=meanmiss
-    elif ("Mr." in pas_ts.ix[i,'Name'] and pas_ts.ix[i,'Age']<0):
-        pas_ts.ix[i,'Age']=meanmr
-    elif ("Mrs." in pas_ts.ix[i,'Name'] and pas_ts.ix[i,'Age']<0):
-        pas_ts.ix[i,'Age']=meanmrs
-    else:
-        if (pas_ts.ix[i,'Age']<0):
-            pas_ts.ix[i,'Age']=meantot
-
-#N = pas_tr.ix[:, 'Ticket']
-#C = Counter(N)
-#print [ [k,]*v for k,v in C.items()]
-
-def round_age(age):
-    if age<1:
-        ageout=0
-    else:
-        ageout=round(age,0)
-    return ageout
-
-pas_tr['Age'] = pas_tr.Age.apply(round_age)
-pas_ts['Age'] = pas_ts.Age.apply(round_age)
-
-### Cabin might not be important
-### We will just use a variable 1=cabin assigned 0=cabin not assigned
-
-pas_tr.Cabin = pas_tr.Cabin.fillna(-10)
-pas_ts.Cabin = pas_ts.Cabin.fillna(-10)
-
-def dummycabin(cabin):
-    if cabin==-10:
-        cabinout=0
-    else:
-        cabinout=1
-    return cabinout
-
-pas_tr['Cabin'] = pas_tr.Cabin.apply(dummycabin)
-pas_ts['Cabin'] = pas_ts.Cabin.apply(dummycabin)
-
-### Manipulations concerning the fare
-### It is reasonable that the fare goes "linearly" with # of family memebers
-### accordingly we renormalize it and introduce the 'NFare' column
-
-for i in range(szts):
-    print pas_ts.ix[i,'Fare'] , pas_ts.ix[i,'Name']
-
-mn=numpy.mean(pas_ts['Fare'])
-pas_ts.Fare = pas_ts.Fare.fillna(mn)
-
-pas_tr['NFare'] = pas_tr['Fare']/pas_tr['TotFamily']
-pas_ts['NFare'] = pas_ts['Fare']/pas_ts['TotFamily']
-
-
-### Plotting data
-###########################################
-sns.set(font_scale = 0.45)
-plt.figure(figsize=[80,12])
-plt.subplot(211)
-#sns.distplot(surv['Age'].dropna().values, bins=range(0, 81, 1), kde=False, color=surv_col)
-#sns.distplot(nosurv['Age'].dropna().values, bins=range(0, 81, 1), kde=False, color=nosurv_col,
-#            axlabel='Age')
-#df = df.dropna(axis=0)
-#plotage=pas_tr.ix[:]
-sns.barplot('Age', 'Survived', data=pas_tr)
-#sns.distplot('Age', 'Survived',bins=range(0, 81, 1), data=pas_tr)
-plt.subplot(212)
-sns.countplot(x='Age', data=pas_tr )
-
-#plt.show()
-
-plt.figure(figsize=[12,18])
-
-plt.subplot(321)
-sns.barplot('Sex', 'Survived', data=pas_tr)
-plt.subplot(322)
-sns.countplot(x='Sex', data=pas_tr )
-
-plt.subplot(323)
-sns.barplot('Pclass', 'Survived', data=pas_tr)
-plt.subplot(324)
-sns.countplot(x='Pclass', data=pas_tr )
-
-plt.subplot(325)
-sns.barplot('Embarked', 'Survived', data=pas_tr)
-plt.subplot(326)
-sns.countplot(x='Embarked', data=pas_tr )
-
-#plt.show()
-
-plt.figure(figsize=[12,18])
-
-plt.subplot(221)
-sns.barplot('SibSp', 'Survived', data=pas_tr)
-plt.subplot(222)
-sns.countplot(x='SibSp', data=pas_tr )
-plt.subplot(223)
-sns.barplot('Parch', 'Survived', data=pas_tr)
-#sns.barplot('Fare', 'Survived', data=pas_tr)
-plt.subplot(224)
-sns.countplot(x='Parch', data=pas_tr )
-#sns.countplot(x='Fare', data=pas_tr )
-
-#plt.show()
-
-plt.figure(figsize=[12,18])
-
-plt.subplot(211)
-sns.barplot('NFare', 'Survived', data=pas_tr)
-plt.subplot(212)
-sns.barplot('Cabin', 'Survived', data=pas_tr)
-
-#plt.subplot(8,2,13)
-#sns.distplot(np.log10(surv['Fare'].dropna().values+1), kde=False, color=surv_col)
-#sns.distplot(np.log10(nosurv['Fare'].dropna().values+1), kde=False, color=nosurv_col,axlabel='Fare')
-#plt.subplots_adjust(top=0.2, bottom=0.08, left=0.10, right=0.5, hspace=0.85,
-#                    wspace=0.65)
-
-#plt.show()
-#################################################
-
-### Create dummy variables for Pclass
-
-pclass_dummies_tr  = pd.get_dummies(pas_tr['Pclass'])
-pclass_dummies_tr.columns = ['Class_1','Class_2','Class_3']
-pclass_dummies_tr.drop(['Class_3'], axis=1, inplace=True)
-
-pclass_dummies_ts  = pd.get_dummies(pas_ts['Pclass'])
-pclass_dummies_ts.columns = ['Class_1','Class_2','Class_3']
-pclass_dummies_ts.drop(['Class_3'], axis=1, inplace=True)
-
-pas_tr.drop(['Pclass'],axis=1,inplace=True)
-pas_ts.drop(['Pclass'],axis=1,inplace=True)
-
-pas_tr = pas_tr.join(pclass_dummies_tr)
-pas_ts = pas_ts.join(pclass_dummies_ts)
-
-###
-
-### Create dummy variables for Embarked
-
-pas_tr.Embarked = pas_tr.Embarked.fillna('S')
-pas_ts.Embarked = pas_ts.Embarked.fillna('S')
-
-embarked_dummies_tr  = pd.get_dummies(pas_tr['Embarked'])
-embarked_dummies_tr.columns = ['Embarked_1','Embarked_2','Embarked_3']
-embarked_dummies_tr.drop(['Embarked_3'], axis=1, inplace=True)
-
-embarked_dummies_ts  = pd.get_dummies(pas_ts['Embarked'])
-embarked_dummies_ts.columns = ['Embarked_1','Embarked_2','Embarked_3']
-embarked_dummies_ts.drop(['Embarked_3'], axis=1, inplace=True)
-
-pas_tr.drop(['Embarked'],axis=1,inplace=True)
-pas_ts.drop(['Embarked'],axis=1,inplace=True)
-
-pas_tr = pas_tr.join(embarked_dummies_tr)
-pas_ts = pas_ts.join(embarked_dummies_ts)
-
-###
-
-pas_tr['Mul']=pas_tr['Age']*pas_tr['Fare']
-pas_ts['Mul']=pas_ts['Age']*pas_ts['Fare']
-
-###
-
-pas_tr=pas_tr.drop('Name',axis=1)
-pas_ts=pas_ts.drop('Name',axis=1)
-#pas_tr=pas_tr.drop('Fare',axis=1)
-#pas_ts=pas_ts.drop('Fare',axis=1)
-
-### Print a few values of the modified datastructures
+print ('Test data set')
+print ts.head()
+print " "
 print ('!-----------------------!')
-print pas_tr.head()
+print ('Tot data set')
+print tot.head()
+print " "
+
+### Print some information on the two datasets
 print ('!-----------------------!')
-print pas_ts.head()
+#tr.info()
+print ('!-----------------------!')
+#ts.info()
+print ('!-----------------------!')
+#tot.info()
 
 
-### Overwrite pas_tot with the new data structure; useful for feature normalization
+### Drop the column 'Id' which is for sure a useless feauture
 
-pas_tot=pd.concat([pas_tr, pas_ts], axis=0, ignore_index=True)
+hid=ts['Id']
+tot=tot.drop('Id',axis=1)
 
-### Normalize Age and Fare
+### A first screening on data: type of each column, a few examples printed, percentage of non-null items per column, and number of uniques items
 
-mn=numpy.mean(pas_tot['Mul'])
-st=numpy.std(pas_tot['Mul'])
-mx=max(pas_tot['Mul'])
-pas_tr['Mul']=(pas_tr['Mul']-mn)/(st)
-pas_ts['Mul']=(pas_ts['Mul']-mn)/(st)
+l, c=tot.shape
+print "Column, type, line1, line2, line3, line4, precentage of non-null entries, number of unique entries"
+for i in tot.columns:
+#    if (float(tot[i].count())/float(l)*100<100):
+    print i, tot[i].dtype, list(tot.loc[0:3,i]), float(tot[i].count())/float(l)*100, tot[i].nunique()
 
-mn=numpy.mean(pas_tot['Age'])
-st=numpy.std(pas_tot['Age'])
-mx=max(pas_tot['Age'])
-pas_tr['Age']=(pas_tr['Age']-mn)/(st)
-pas_ts['Age']=(pas_ts['Age']-mn)/(st)
+#print tr.loc[:,'Alley']
 
-mn=numpy.mean(pas_tot['NFare'])
-st=numpy.std(pas_tot['NFare'])
-mx=max(pas_tot['NFare'])
-pas_tr['NFare']=(pas_tr['NFare']-mn)/(st)
-pas_ts['NFare']=(pas_ts['NFare']-mn)/(st)
+##############################################################
 
-mn=numpy.mean(pas_tot['Fare'])
-st=numpy.std(pas_tot['Fare'])
-mx=max(pas_tot['Fare'])
-pas_tr['Fare']=(pas_tr['Fare']-mn)/(st)
-pas_ts['Fare']=(pas_ts['Fare']-mn)/(st)
+# Nan entries per line
+#a=tot.isnull().sum(axis=1)
+#print max(a)
+# The max value is 16
 
-mn=numpy.mean(pas_tot['TotFamily'])
-st=numpy.std(pas_tot['TotFamily'])
-mx=max(pas_tot['TotFamily'])
-pas_tr['TotFamily']=pas_tr['TotFamily']
-pas_ts['TotFamily']=pas_ts['TotFamily']
+#############################################################
 
-mn=numpy.mean(pas_tot['SibSp'])
-st=numpy.std(pas_tot['SibSp'])
-mx=max(pas_tot['SibSp'])
-pas_tr['SibSp']=pas_tr['SibSp']
-pas_ts['SibSp']=pas_ts['SibSp']
+### Some observations from the previous screening
 
-mn=numpy.mean(pas_tot['Parch'])
-st=numpy.std(pas_tot['Parch'])
-mx=max(pas_tot['Parch'])
-pas_tr['Parch']=pas_tr['Parch']
-pas_ts['Parch']=pas_ts['Parch']
+# MSSubClass int64 [60, 20, 60, 70] 100 15
+# MSSubClass should be categorical but it's probably good to keeo the order in the numbers (ordinal variable)
 
+#OverallQual int64 [7, 6, 7, 7] 100 10
+#OverallCond int64 [5, 8, 5, 5] 100 9
+# Ordinal variables
 
-print pas_tr.head()
-#print ('!-----------------------!')
-print pas_ts.head()
+# YearBuilt int64 [2003, 1976, 2001, 1915] 100 112
+# YearRemodAdd int64 [2003, 1976, 2002, 1970] 100 61
+# I think that in all the year variables is good to keep the order and not to use 
+# one-hot encoding, which would also significatively increase the number of columns 
 
-print pas_tr.head()
-#print ('!-----------------------!')
-print pas_ts.head()
+# the variables below might be considered ordinal and label oncoding might help
+# I will need to interpret the entries: 'Gd' means likely 'good'  
+#ExterQual object ['Gd', 'TA', 'Gd', 'TA'] 100 4
+#ExterCond object ['TA', 'TA', 'TA', 'TA'] 100 5
+#BsmtQual object ['Gd', 'Gd', 'Gd', 'TA'] 97.2250770812 4
+#BsmtCond object ['TA', 'TA', 'TA', 'Gd'] 97.1908187736  4
+# KitchenQual object ['Gd', 'TA', 'Gd', 'Gd'] 99.9657416924 4
+#GarageQual object ['TA', 'TA', 'TA', 'TA'] 94.5529290853 5
+#GarageCond object ['TA', 'TA', 'TA', 'TA'] 94.5529290853 5
+
+# Replacement according to dictionary
+# {'NA': 0, 'Po': 1, 'Fa': 2, 'TA': 3, 'Gd': 4, 'Ex': 5} 
+# Po: poor, Fa: fair, TA: average, Gd: good, Ex: excellent
 
 
+repl_list=['ExterQual','ExterCond','BsmtQual','BsmtCond','KitchenQual','GarageQual','GarageCond']
+repl_dic = {'Po': 1, 'Fa': 2, 'TA':3, 'Gd':4, 'Ex':5}
 
-### Defining training and testing sets
-#pas_tr=pas_tr.drop('Age',axis=1)
-#pas_ts=pas_ts.drop('Age',axis=1)
-#pas_tr=pas_tr.drop('Mul',axis=1)
-#pas_ts=pas_ts.drop('Mul',axis=1)
+#for i in repl_list:
+#    print float(tot[i].count())/float(l)*100
+#    print tot[i].value_counts()
 
 
-X_train = pas_tr.drop("Survived",axis=1)
-Y_train = pas_tr["Survived"]
-X_test  = pas_ts.drop("Survived",axis=1)
+for i in repl_list:
+#since only relatively few values are missing I'll replace Nan with TA:3 which is an average rate
+# and the dominant one
+    tot[i]=tot[i].fillna('3')
+    tot[i].replace(repl_dic, inplace=True)
 
-#X_train, X_test, Y_train, Y_test = train_test_split(dat, trg, test_size=0.4, random_state=0)
 
-#clf = RandomForestClassifier(n_estimators=100)
-clf = svm.SVC(kernel='rbf',C=200,gamma=0.01)
-#clf = LogisticRegression(tol=0.000001,C=1)
-#clf = MLPClassifier(solver='lbfgs', alpha=1e-5, hidden_layer_sizes=(80, 80), random_state=1)
-clf.fit(X_train, Y_train)
-scores = cross_val_score(clf, X_train, Y_train, cv=10)
+# For month and year let's keep the encoding below
+#MoSold int64 [2, 5, 9, 2] 100 12
+#YrSold int64 [2008, 2007, 2008, 2006] 100 5
+
+# SaleCondition might be considered ordinal too
+# Leave it the way it is for the moment
+#SaleCondition object ['Normal', 'Normal', 'Normal', 'Abnorml'] 100 6
+
+
+#############################################################
+
+# Let's look at the most recurrent values for some of the catagorical data 
+# It could help to guess on how to replace them
+
+#inc_feat= ['MSZoning', 'Alley', 'Utilities', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 'BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2',   ]
+
+### Let's take a look again to see how many data are still missing
+#l, c=tot.shape
+#print "Column, type, line1, line2, line3, line4, precentage of non-null entries, number of unique entries"
+#for i in tot.columns:
+#    if (float(tot[i].count())/float(l)*100<100):
+#        print i, tot[i].dtype, list(tot.loc[0:3,i]), float(tot[i].count())/float(l)*100, tot[i].nunique()
+
+
+#############################################################
+
+# According to the previous screening the following variables still miss some values 
+
+#Column, type, line1, line2, line3, line4, precentage of non-null entries, number of unique entries
+#MSZoning object ['RL', 'RL', 'RL', 'RL'] 99.8629667694 5
+#LotFrontage float64 [65.0, 80.0, 68.0, 60.0] 83.3504624872 128
+#Alley object [nan, nan, nan, nan] 6.78314491264 2
+#Utilities object ['AllPub', 'AllPub', 'AllPub', 'AllPub'] 99.9314833847 2
+#Exterior1st object ['VinylSd', 'MetalSd', 'VinylSd', 'Wd Sdng'] 99.9657416924 15
+#Exterior2nd object ['VinylSd', 'MetalSd', 'VinylSd', 'Wd Shng'] 99.9657416924 16
+#MasVnrType object ['BrkFace', 'None', 'BrkFace', 'None'] 99.1778006166 4
+#MasVnrArea float64 [196.0, 0.0, 162.0, 0.0] 99.2120589243 444
+#BsmtExposure object ['No', 'Gd', 'Mn', 'No'] 97.1908187736 4
+#BsmtFinType1 object ['GLQ', 'ALQ', 'GLQ', 'ALQ'] 97.2935936965 6
+#BsmtFinSF1 float64 [706.0, 978.0, 486.0, 216.0] 99.9657416924 991
+#BsmtFinType2 object ['Unf', 'Unf', 'Unf', 'Unf'] 97.2593353888 6
+#BsmtFinSF2 float64 [0.0, 0.0, 0.0, 0.0] 99.9657416924 272
+#BsmtUnfSF float64 [150.0, 284.0, 434.0, 540.0] 99.9657416924 1135
+#TotalBsmtSF float64 [856.0, 1262.0, 920.0, 756.0] 99.9657416924 1058
+#Electrical object ['SBrkr', 'SBrkr', 'SBrkr', 'SBrkr'] 99.9657416924 5
+#BsmtFullBath float64 [1.0, 0.0, 1.0, 1.0] 99.9314833847 4
+#BsmtHalfBath float64 [0.0, 1.0, 0.0, 0.0] 99.9314833847 3
+#Functional object ['Typ', 'Typ', 'Typ', 'Typ'] 99.9314833847 7
+#FireplaceQu object [nan, 'TA', 'TA', 'Gd'] 51.3532031518 5
+#GarageType object ['Attchd', 'Attchd', 'Attchd', 'Detchd'] 94.6214457006 6
+#GarageYrBlt float64 [2003.0, 1976.0, 2001.0, 1998.0] 94.5529290853 103
+#GarageFinish object ['RFn', 'RFn', 'RFn', 'Unf'] 94.5529290853 3
+#GarageCars float64 [2.0, 2.0, 2.0, 3.0] 99.9657416924 6
+#GarageArea float64 [548.0, 460.0, 608.0, 642.0] 99.9657416924 603
+#PoolQC object [nan, nan, nan, nan] 0.342583076396 3
+#Fence object [nan, nan, nan, nan] 19.5614936622 4
+#MiscFeature object [nan, nan, nan, nan] 3.59712230216 4
+#SaleType object ['WD', 'WD', 'WD', 'WD'] 99.9657416924 9
+
+miss_list=['MSZoning', 'LotFrontage', 'Alley', 'Utilities', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 'MasVnrArea', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinSF1', 'BsmtFinType2', 'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', 'Electrical', 'BsmtFullBath', 'BsmtHalfBath', 'Functional', 'FireplaceQu', 'GarageType', 'GarageYrBlt', 'GarageFinish', 'GarageCars', 'GarageArea', 'PoolQC', 'Fence', 'MiscFeature', 'SaleType']
+
+# replacing missing catagorical features; if only few values are missing replace them with the most frequent item 
+for i in miss_list:
+        if (tot[i].dtype=='object'):
+			if (float(tot[i].count())/float(l)*100 > 97):
+	                #    print i, float(tot[i].count())/float(l)*100    
+		        #    print tot[i].value_counts()
+			#    print tot[i].value_counts().idxmax()
+                            a = str(tot[i].value_counts().idxmax())
+                            tot[i]=tot[i].fillna(a) 
+                        else:
+			    tot[i]=tot[i].fillna('Notavailable')
+
+# replacing missing continous variables 
+
+mn=tot['LotFrontage'].mean()
+tot['LotFrontage']=tot['LotFrontage'].fillna(mn)  #Replace with average
+
+mn=tot['MasVnrArea'].mean()
+tot['MasVnrArea']=tot['MasVnrArea'].fillna(mn)  #Replace with average
+
+tot['BsmtFinSF1']=tot['BsmtFinSF1'].fillna(0)  #Replace with 0 for the moment - no basement 
+
+tot['BsmtFinSF2']=tot['BsmtFinSF2'].fillna(0)  #Replace with 0 for the moment - no basement 
+
+tot['BsmtUnfSF']=tot['BsmtUnfSF'].fillna(0) #Replace with 0 for the moment - no basement
+
+tot['BsmtUnfSF']=tot['BsmtUnfSF'].fillna(0) #Replace with 0 for the moment - no basement
+ 
+tot['TotalBsmtSF']=tot['TotalBsmtSF'].fillna(0) #Replace with 0 for the moment - no basement
+ 
+tot['BsmtFullBath']=tot['BsmtFullBath'].fillna(0) #Replace with 0 for the moment - no basement
+ 
+tot['BsmtHalfBath']=tot['BsmtHalfBath'].fillna(0) #Replace with 0 for the moment - no basement
+ 
+tot['GarageYrBlt']=tot['GarageYrBlt'].fillna(tot['YearBuilt']) # Let's usppose the year of contruction of the house 
+ 
+tot['GarageCars']=tot['GarageCars'].fillna(0) #Replace with 0 for the moment - no garage
+
+tot['GarageArea']=tot['GarageArea'].fillna(0) #Replace with 0 for the moment - no garage
+
+#check if there is still some missing value
+#print tot.isnull().values.any()
+
+##################################################
+# getting dummy variables corresponding to categorical variables
+
+tot=pd.get_dummies(data=tot)
+print tot.head()
+
+##################################################
+# regression
+
+tr=tot.iloc[:1460,:]
+ts=tot.iloc[1460:,:]
+
+
+X_train = tr.drop("SalePrice",axis=1)
+Y_train = tr["SalePrice"]
+X_test  = ts.drop("SalePrice",axis=1)
+
+#reg = KernelRidge(gamma=.0002441,kernel='laplacian',alpha=0.00000000093132257)
+#reg = KernelRidge(alpha=2000.)
+reg = Ridge(alpha=0.5, normalize=True)
+#reg=RandomForestRegressor(n_estimators=100)
+#reg.fit(X_train, Y_train)
+scores = cross_val_score(reg, X_train, Y_train, scoring='neg_mean_absolute_error', cv=10)
 print scores
 print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+#scores = cross_validation.cross_val_score(reg, X_train, Y_train, scoring='mean_squared_error', cv=10,)
 
-clf.fit(X_train, Y_train)
-prediction=clf.predict(X_test)
-print clf.score(X_train, Y_train)
+# This will print the mean of the list of errors that were output and 
+# provide your metric for evaluation
+#print scores.mean()
 
+reg.fit(X_train, Y_train)
+prediction=reg.predict(X_test)
+#print reg.score(X_train, Y_train)
 
 submission = pd.DataFrame({
-        "PassengerId": psid,
-        "Survived": prediction
+        "Id": hid,
+        "SalePrice": prediction
     })
 submission.to_csv('final.csv', index=False)
-
-
-#print "sztr",sztr
-#print y  # pas.ix[10, 'Survived']
-
-#y=numpy.zeros((900))
-#print pas.as_matrix
-#print y
