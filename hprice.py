@@ -1,11 +1,12 @@
 import pandas as pd 
 import numpy as np
 from numpy import linalg 
-from sklearn import svm
+from sklearn.svm import SVR
 from sklearn.kernel_ridge import KernelRidge
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import cross_val_score
 from sklearn.linear_model import Ridge
+from sklearn.linear_model import Lasso
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -235,10 +236,9 @@ tot['GarageArea']=tot['GarageArea'].fillna(0) #Replace with 0 for the moment - n
 #check if there is still some missing value
 #print tot.isnull().values.any()
 
-##################################################
 # getting dummy variables corresponding to categorical variables
 
-tot=pd.get_dummies(data=tot)
+tot=pd.get_dummies(data=tot,drop_first=True)
 print tot.head()
 
 ##################################################
@@ -247,6 +247,41 @@ print tot.head()
 tr=tot.iloc[:1460,:]
 ts=tot.iloc[1460:,:]
 
+##################################################
+######### visualization ##########################
+
+# Let's plot Prive vs. Area as often this is an important criterion
+
+sns.regplot(x="GrLivArea", y="SalePrice", data=tr);
+plt.show()
+
+# We could try to remove some outliers (2 or 4) 
+# The model works sizeably better in crossvalidation 
+# Sale Prices are very scattered at high GrLivArea
+# However, if we keep removing data at high GrLivArea
+# the cross validation improves a lot but overall teh model
+# might not be good 
+# NOTE: indeed the score on leader board is barely different
+
+tr=tr[tr['GrLivArea'] < 4000]
+print tr.shape
+
+# Let's look at the distribution of prices 
+
+sns.distplot(tr['SalePrice'])
+plt.show()
+
+# distribution is right skewed 
+# trying to apply a log transformation
+
+tr['SalePrice']=np.log(tr['SalePrice'])
+sns.distplot(tr['SalePrice'])
+plt.show()
+
+# much better after applying the log
+
+##################################################
+
 
 X_train = tr.drop("SalePrice",axis=1)
 Y_train = tr["SalePrice"]
@@ -254,12 +289,14 @@ X_test  = ts.drop("SalePrice",axis=1)
 
 #reg = KernelRidge(gamma=.0002441,kernel='laplacian',alpha=0.00000000093132257)
 #reg = KernelRidge(alpha=2000.)
-reg = Ridge(alpha=0.5, normalize=True)
-#reg=RandomForestRegressor(n_estimators=100)
+reg = Lasso(alpha=0.00008, normalize=True)
+#reg = Ridge(alpha=0.2, normalize=True)
+#reg=RandomForestRegressor(n_estimators=400, max_features=40)
 #reg.fit(X_train, Y_train)
-scores = cross_val_score(reg, X_train, Y_train, scoring='neg_mean_absolute_error', cv=10)
+scores = cross_val_score(reg, X_train, Y_train, scoring='neg_mean_squared_error', cv=10)
+scores = np.sqrt(-scores)
 print scores
-print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
+print("Accuracy: %0.4f (+/- %0.4f)" % (scores.mean(), scores.std() ))
 #scores = cross_validation.cross_val_score(reg, X_train, Y_train, scoring='mean_squared_error', cv=10,)
 
 # This will print the mean of the list of errors that were output and 
@@ -269,6 +306,7 @@ print("Accuracy: %0.2f (+/- %0.2f)" % (scores.mean(), scores.std() * 2))
 reg.fit(X_train, Y_train)
 prediction=reg.predict(X_test)
 #print reg.score(X_train, Y_train)
+prediction=np.exp(prediction)
 
 submission = pd.DataFrame({
         "Id": hid,
